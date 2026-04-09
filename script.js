@@ -64,9 +64,8 @@
   }
 
   // 🔥 25% от итоговой суммы
-  function getMinDown(price, ratePercent) {
-    var r = ratePercent / 100;
-    var total = price * (1 + r);
+  function getMinDown(price) {
+    var total = price;
     var exact = total * 0.25;
     return Math.ceil(exact / 50) * 50;
   }
@@ -97,7 +96,7 @@
     var p = getPrice();
     if (!isFinite(p)) return;
 
-    var min = getMinDown(p, getRatePercent());
+    var min = getMinDown(p);
     var max50 = getMaxDown(p);
 
     downEl.min = String(min);
@@ -118,7 +117,7 @@
     if (!getHasDown()) return;
 
     var p = getPrice();
-    var min = isFinite(p) ? getMinDown(p, getRatePercent()) : 0;
+    var min = isFinite(p) ? getMinDown(p) : 0;
     var max50 = isFinite(p) ? getMaxDown(p) : 0;
     var cur = parseFloat(String(downEl.value).replace(",", "."));
 
@@ -181,7 +180,7 @@
     if (hasDown) {
       down = parseFloat(String(downEl.value).replace(",", ".")) || 0;
 
-      var minDown = getMinDown(price, rate);
+      var minDown = getMinDown(price);
       var maxDown = getMaxDown(price);
 
       if (down > price) {
