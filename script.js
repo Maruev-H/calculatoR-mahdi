@@ -23,7 +23,6 @@
   var outMarkup = document.getElementById("out-markup");
   var outTotal = document.getElementById("out-total");
   var outMonthly = document.getElementById("out-monthly");
-  var waLink = document.getElementById("wa-link");
 
   function formatMoney(n) {
     return new Intl.NumberFormat("ru-RU", {
@@ -162,66 +161,92 @@
   }
 
   function recalc() {
-    var price = getPrice();
-    var months = getMonths();
-    var hasDown = getHasDown();
-    var rate = getRatePercent();
+  var price = getPrice();
+  var months = getMonths();
+  var hasDown = getHasDown();
+  var rate = getRatePercent();
 
-    if (!isFinite(price)) {
-      outDown.textContent = "—";
-      outMarkup.textContent = "—";
-      outTotal.textContent = "—";
-      outMonthly.textContent = "—";
+  if (!isFinite(price)) {
+    outDown.textContent = "—";
+    outMarkup.textContent = "—";
+    outTotal.textContent = "—";
+    outMonthly.textContent = "—";
+    return;
+  }
+
+  var down = 0;
+
+  if (hasDown) {
+    down = parseFloat(String(downEl.value).replace(",", ".")) || 0;
+
+    var minDown = getMinDown(price);
+    var maxDown = getMaxDown(price);
+
+    if (down > price) {
+      outMonthly.textContent = "Взнос не может превышать стоимость";
       return;
     }
 
-    var down = 0;
-
-    if (hasDown) {
-      down = parseFloat(String(downEl.value).replace(",", ".")) || 0;
-
-      var minDown = getMinDown(price);
-      var maxDown = getMaxDown(price);
-
-      if (down > price) {
-        outMonthly.textContent = "Взнос не может превышать стоимость";
-        return;
-      }
-
-      if (!isMultipleOf50Rub(down)) {
-        outMonthly.textContent = "Взнос должен быть кратен 50 ₽";
-        return;
-      }
-
-      if (down > maxDown) {
-        outMonthly.textContent = "Максимум: " + formatMoney(maxDown);
-        return;
-      }
-
-      if (down < minDown) {
-        outMonthly.textContent = "Минимальный взнос 25% от итоговой суммы";
-        return;
-      }
+    if (!isMultipleOf50Rub(down)) {
+      outMonthly.textContent = "Взнос должен быть кратен 50 ₽";
+      return;
     }
 
-    var markup = roundTo50(price * (rate / 100));
-    var total = roundTo50(price + markup);
+    if (down > maxDown) {
+      outMonthly.textContent = "Максимум: " + formatMoney(maxDown);
+      return;
+    }
 
-    var monthly = hasDown
+    if (down < minDown) {
+      outMonthly.textContent = "Минимальный взнос 25% от суммы";
+      return;
+    }
+  }
+
+  var markup = 0;
+  var total = 0;
+  var monthly = 0;
+
+  // 🔥 SPECIAL BOOST
+  var specialBoost = false;
+
+  if (hasDown) {
+    var minDown = getMinDown(price);
+
+    if (down >= minDown + 5000) {
+      specialBoost = true;
+    }
+  }
+
+  if (specialBoost) {
+    // 👉 Берём ставку БЕЗ взноса
+    var rateWithout = RATES_WITHOUT[months] || 0;
+
+    markup = roundTo50((price - down) * (rateWithout / 100));
+    total = roundTo50(price + markup);
+
+    monthly = roundTo50((total - down) / months);
+  } else {
+    // 👉 Обычная логика
+    markup = roundTo50(price * (rate / 100));
+    total = roundTo50(price + markup);
+
+    monthly = hasDown
       ? roundTo50((total - down) / months)
       : roundTo50(total / months);
-
-    if (hasDown) {
-      rowDown.classList.remove("is-hidden");
-      outDown.textContent = formatMoney(down);
-    } else {
-      rowDown.classList.add("is-hidden");
-    }
-
-    outMarkup.textContent = formatMoney(markup);
-    outTotal.textContent = formatMoney(total);
-    outMonthly.textContent = formatMoney(monthly);
   }
+
+  if (hasDown) {
+    rowDown.classList.remove("is-hidden");
+    outDown.textContent = formatMoney(down);
+  } else {
+    rowDown.classList.add("is-hidden");
+  }
+
+  outMarkup.textContent = formatMoney(markup);
+  outTotal.textContent = formatMoney(total);
+  outMonthly.textContent = formatMoney(monthly);
+}
 
   function onHasDownChange() {
     if (getHasDown()) {
