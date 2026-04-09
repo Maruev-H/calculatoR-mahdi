@@ -3,12 +3,12 @@
 
   // С взносом
   var RATES_WITH = {
-    4: 12, 5: 15, 6: 18, 7: 21, 8: 24, 9: 27, 10: 30, 11: 33, 12: 35
+    3: 9, 4: 12, 5: 15, 6: 18, 7: 21, 8: 24, 9: 27, 10: 30, 11: 33, 12: 35
   };
 
   // Без взноса
   var RATES_WITHOUT = {
-    1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24,
+    3: 12, 4: 16, 5: 20, 6: 24,
     7: 28, 8: 32, 9: 36, 10: 40, 11: 44, 12: 45
   };
 
@@ -54,7 +54,7 @@
   }
 
   function getMonths() {
-    return parseInt(monthsEl.value, 10) || 1;
+    return parseInt(monthsEl.value, 10) || 3;
   }
 
   function getRatePercent() {
@@ -63,15 +63,7 @@
     return table[m] != null ? table[m] : 0;
   }
 
-  /**
-   * 🔥 НОВАЯ ФОРМУЛА
-   * Мин. взнос = 25% от итоговой суммы
-   *
-   * total = price * (1 + r)
-   * down = 0.25 * total
-   *
-   * => down = (price * (1 + r)) / 4
-   */
+  // 🔥 25% от итоговой суммы
   function getMinDown(price, ratePercent) {
     var r = ratePercent / 100;
     var total = price * (1 + r);
@@ -92,7 +84,7 @@
 
   function fillMonths() {
     var html = "";
-    for (var i = 1; i <= 12; i++) {
+    for (var i = 3; i <= 12; i++) {
       html += '<option value="' + i + '">' + i + " мес.</option>";
     }
     monthsEl.innerHTML = html;
@@ -101,6 +93,7 @@
 
   function syncDownFromPrice() {
     if (!getHasDown()) return;
+
     var p = getPrice();
     if (!isFinite(p)) return;
 
@@ -121,8 +114,51 @@
     }
   }
 
+  function refreshDownHint() {
+    if (!getHasDown()) return;
+
+    var p = getPrice();
+    var min = isFinite(p) ? getMinDown(p, getRatePercent()) : 0;
+    var max50 = isFinite(p) ? getMaxDown(p) : 0;
+    var cur = parseFloat(String(downEl.value).replace(",", "."));
+
+    if (isFinite(p)) {
+      downEl.min = String(min);
+      downEl.max = String(max50);
+    }
+
+    if (!isFinite(p)) {
+      downHint.textContent = "";
+      downHint.classList.remove("is-error");
+      return;
+    }
+
+    if (isFinite(cur) && cur > p) {
+      downHint.textContent = "Взнос не может быть больше стоимости товара";
+      downHint.classList.add("is-error");
+    } else if (isFinite(cur) && !isMultipleOf50Rub(cur)) {
+      downHint.textContent = "Взнос должен быть кратен 50 ₽";
+      downHint.classList.add("is-error");
+    } else if (isFinite(cur) && cur < min) {
+      downHint.textContent =
+        "Минимум " + formatMoney(min) + " (25% от итоговой суммы)";
+      downHint.classList.add("is-error");
+    } else {
+      downHint.textContent =
+        "Кратно 50 ₽, не менее 25% от итоговой суммы";
+      downHint.classList.remove("is-error");
+    }
+  }
+
   function onPriceInput() {
     syncDownFromPrice();
+    refreshDownHint();
+    recalc();
+  }
+
+  function onDownInput() {
+    downEl.dataset.userEdited = "1";
+    refreshDownHint();
     recalc();
   }
 
@@ -132,7 +168,13 @@
     var hasDown = getHasDown();
     var rate = getRatePercent();
 
-    if (!isFinite(price)) return;
+    if (!isFinite(price)) {
+      outDown.textContent = "—";
+      outMarkup.textContent = "—";
+      outTotal.textContent = "—";
+      outMonthly.textContent = "—";
+      return;
+    }
 
     var down = 0;
 
@@ -140,9 +182,25 @@
       down = parseFloat(String(downEl.value).replace(",", ".")) || 0;
 
       var minDown = getMinDown(price, rate);
+      var maxDown = getMaxDown(price);
+
+      if (down > price) {
+        outMonthly.textContent = "Взнос не может превышать стоимость";
+        return;
+      }
+
+      if (!isMultipleOf50Rub(down)) {
+        outMonthly.textContent = "Взнос должен быть кратен 50 ₽";
+        return;
+      }
+
+      if (down > maxDown) {
+        outMonthly.textContent = "Максимум: " + formatMoney(maxDown);
+        return;
+      }
 
       if (down < minDown) {
-        outMonthly.textContent = "Минимальный взнос 25%";
+        outMonthly.textContent = "Минимальный взнос 25% от итоговой суммы";
         return;
       }
     }
@@ -154,7 +212,13 @@
       ? roundTo50((total - down) / months)
       : roundTo50(total / months);
 
-    outDown.textContent = hasDown ? formatMoney(down) : "—";
+    if (hasDown) {
+      rowDown.classList.remove("is-hidden");
+      outDown.textContent = formatMoney(down);
+    } else {
+      rowDown.classList.add("is-hidden");
+    }
+
     outMarkup.textContent = formatMoney(markup);
     outTotal.textContent = formatMoney(total);
     outMonthly.textContent = formatMoney(monthly);
@@ -163,9 +227,13 @@
   function onHasDownChange() {
     if (getHasDown()) {
       downBlock.classList.remove("is-hidden");
+      downEl.dataset.userEdited = "";
       syncDownFromPrice();
+      refreshDownHint();
     } else {
       downBlock.classList.add("is-hidden");
+      downHint.textContent = "";
+      downHint.classList.remove("is-error");
     }
     recalc();
   }
@@ -178,11 +246,16 @@
 
   priceEl.addEventListener("input", onPriceInput);
   priceEl.addEventListener("change", onPriceInput);
-  downEl.addEventListener("input", recalc);
+
+  downEl.addEventListener("input", onDownInput);
+  downEl.addEventListener("change", onDownInput);
+
   monthsEl.addEventListener("change", function () {
     syncDownFromPrice();
+    refreshDownHint();
     recalc();
   });
 
   onHasDownChange();
+  recalc();
 })();
