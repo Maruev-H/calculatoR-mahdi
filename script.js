@@ -57,10 +57,74 @@
     return parseInt(monthsEl.value, 10) || 3;
   }
 
-  function getRatePercent() {
+  /** Ниже минимального взноса — ставка как «без взноса». */
+  function getEffectiveRatePercent(price, down, hasDown) {
     var m = getMonths();
-    var table = getHasDown() ? RATES_WITH : RATES_WITHOUT;
-    return table[m] != null ? table[m] : 0;
+    if (!hasDown) {
+      return RATES_WITHOUT[m] != null ? RATES_WITHOUT[m] : 0;
+    }
+    if (!isFinite(price)) {
+      return RATES_WITH[m] != null ? RATES_WITH[m] : 0;
+    }
+    var rateWith = RATES_WITH[m] != null ? RATES_WITH[m] : 0;
+    var minFav = getMinDown(price, rateWith);
+    var d = isFinite(down) ? down : 0;
+    if (d >= minFav) {
+      return rateWith;
+    }
+    return RATES_WITHOUT[m] != null ? RATES_WITHOUT[m] : 0;
+  }
+
+  /**
+   * Итого: ближайшее к rawTotal, кратное (months + (первый взнос?1:0))×50,
+   * и (итого − взнос) / months кратно 50 без округления платежа.
+   */
+  function alignTotalForEqualMonthly(rawTotal, months, hasDown, down) {
+    var m50 = months * 50;
+    var t = Math.round(rawTotal);
+    if (m50 <= 0) return t;
+
+    if (!hasDown) {
+      return Math.round(t / m50) * m50;
+    }
+
+    var d = Math.round(down);
+    var r = ((d % m50) + m50) % m50;
+    var r50 = r / 50;
+    var L = (months + 1) * 50;
+    var T0 = r50 * L;
+    var step = months * L;
+
+    var tCenter = Math.round((t - T0) / step);
+    var best = NaN;
+    var bestDist = Infinity;
+    for (var dt = -8; dt <= 8; dt++) {
+      var T = T0 + (tCenter + dt) * step;
+      if (T <= d) continue;
+      var dist = Math.abs(T - t);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = T;
+      }
+    }
+
+    if (!isFinite(best)) {
+      var kMin = Math.ceil((d - r + 1) / m50);
+      var kIdeal = Math.round((t - r) / m50);
+      var k0 = kIdeal < kMin ? kMin : kIdeal;
+      for (var k = k0 - 2; k <= k0 + 8; k++) {
+        if (k < kMin) continue;
+        var c = r + k * m50;
+        if (c <= d) continue;
+        var dist2 = Math.abs(c - t);
+        if (dist2 < bestDist) {
+          bestDist = dist2;
+          best = c;
+        }
+      }
+    }
+
+    return isFinite(best) ? best : t;
   }
 
   // 🔥 25% от итоговой суммы
@@ -96,10 +160,11 @@
     var p = getPrice();
     if (!isFinite(p)) return;
 
-    var min = getMinDown(p);
+    var m = getMonths();
+    var min = getMinDown(p, RATES_WITH[m] != null ? RATES_WITH[m] : 0);
     var max50 = getMaxDown(p);
 
-    downEl.min = String(min);
+    downEl.min = "0";
     downEl.max = String(max50);
 
     var cur = parseFloat(String(downEl.value).replace(",", "."));
@@ -108,8 +173,6 @@
       downEl.value = String(min <= max50 ? min : max50);
     } else if (cur > max50) {
       downEl.value = String(max50);
-    } else if (cur < min) {
-      downEl.value = String(min);
     }
   }
 
@@ -117,12 +180,15 @@
     if (!getHasDown()) return;
 
     var p = getPrice();
-    var min = isFinite(p) ? getMinDown(p) : 0;
+    var m = getMonths();
+    var min = isFinite(p)
+      ? getMinDown(p, RATES_WITH[m] != null ? RATES_WITH[m] : 0)
+      : 0;
     var max50 = isFinite(p) ? getMaxDown(p) : 0;
     var cur = parseFloat(String(downEl.value).replace(",", "."));
 
     if (isFinite(p)) {
-      downEl.min = String(min);
+      downEl.min = "0";
       downEl.max = String(max50);
     }
 
@@ -140,11 +206,13 @@
       downHint.classList.add("is-error");
     } else if (isFinite(cur) && cur < min) {
       downHint.textContent =
-        "Минимум " + formatMoney(min) + " (25% от итоговой суммы)";
-      downHint.classList.add("is-error");
+        "Ниже " +
+        formatMoney(min) +
+        " — ставка как без взноса (минимум для ставки «с взносом»: 25% от итоговой с ней)";
+      downHint.classList.remove("is-error");
     } else {
       downHint.textContent =
-        "Кратно 50 ₽, не менее 25% от итоговой суммы";
+        "Кратно 50 ₽, от " + formatMoney(min) + " — ставка «с взносом»";
       downHint.classList.remove("is-error");
     }
   }
@@ -165,13 +233,13 @@
     var price = getPrice();
     var months = getMonths();
     var hasDown = getHasDown();
-    var rate = getRatePercent();
 
     if (!isFinite(price)) {
       outDown.textContent = "—";
       outMarkup.textContent = "—";
       outTotal.textContent = "—";
       outMonthly.textContent = "—";
+      updateWhatsApp(null);
       return;
     }
 
@@ -180,7 +248,6 @@
     if (hasDown) {
       down = parseFloat(String(downEl.value).replace(",", ".")) || 0;
 
-      var minDown = getMinDown(price);
       var maxDown = getMaxDown(price);
 
       if (down > price) {
@@ -200,45 +267,34 @@
         updateWhatsApp(null);
         return;
       }
-
-      if (down < minDown) {
-        outMonthly.textContent = "Минимальный взнос 25% от суммы";
-        updateWhatsApp(null);
-        return;
-      }
     }
+
+    var rateWith = RATES_WITH[months] != null ? RATES_WITH[months] : 0;
+    var minFav = getMinDown(price, rateWith);
 
     var markup = 0;
     var total = 0;
     var monthly = 0;
+    var markupShown = 0;
 
-    // 🔥 SPECIAL BOOST
-    var specialBoost = false;
-
-    if (hasDown) {
-      var minDown = getMinDown(price);
-
-      if (down >= minDown + 5000) {
-        specialBoost = true;
-      }
-    }
+    // 🔥 SPECIAL BOOST (крупный взнос — наценка со ставки «без взноса» на остаток)
+    var specialBoost = hasDown && down >= minFav + 5000;
 
     if (specialBoost) {
-      // 👉 Берём ставку БЕЗ взноса
       var rateWithout = RATES_WITHOUT[months] || 0;
 
       markup = roundTo50((price - down) * (rateWithout / 100));
-      total = roundTo50(price + markup);
-
-      monthly = roundTo50((total - down) / months);
+      var rawTotalSb = roundTo50(price + markup);
+      total = alignTotalForEqualMonthly(rawTotalSb, months, hasDown, down);
+      markupShown = total - price;
+      monthly = (total - down) / months;
     } else {
-      // 👉 Обычная логика
+      var rate = getEffectiveRatePercent(price, down, hasDown);
       markup = roundTo50(price * (rate / 100));
-      total = roundTo50(price + markup);
-
-      monthly = hasDown
-        ? roundTo50((total - down) / months)
-        : roundTo50(total / months);
+      var rawTotal = roundTo50(price + markup);
+      total = alignTotalForEqualMonthly(rawTotal, months, hasDown, down);
+      markupShown = total - price;
+      monthly = hasDown ? (total - down) / months : total / months;
     }
 
     if (hasDown) {
@@ -248,7 +304,7 @@
       rowDown.classList.add("is-hidden");
     }
 
-    outMarkup.textContent = formatMoney(markup);
+    outMarkup.textContent = formatMoney(markupShown);
     outTotal.textContent = formatMoney(total);
     outMonthly.textContent = formatMoney(monthly);
 
