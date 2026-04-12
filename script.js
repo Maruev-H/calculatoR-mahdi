@@ -5,7 +5,7 @@
   var RATES = {
     3: 12, 4: 16, 5: 20, 6: 24, 7: 28, 8: 32, 9: 36, 10: 40, 11: 44, 12: 45
   };
- и
+
   var priceEl = document.getElementById("price");
   var downEl = document.getElementById("down");
   var monthsEl = document.getElementById("months");
