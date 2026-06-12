@@ -1,40 +1,3 @@
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-:root {
-  --bg: #0f0f18;
-  --bg-card: rgba(255, 255, 255, 0.06);
-  --bg-card-solid: #1a1a28;
-  --border: rgba(255, 255, 255, 0.1);
-  --text: #f4f4f8;
-  --muted: #9b9bb0;
-  --accent: #7c6cf5;
-  --accent-soft: rgba(124, 108, 245, 0.2);
-  --success: #3dd68c;
-  --whatsapp: #25d366;
-  --radius: 18px;
-  --shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-}
-
-html {
-  -webkit-text-size-adjust: 100%;
-}
-
-body {
-  margin: 0;
-  min-height: 100dvh;
-  color: var(--text);
-  background:
-    radial-gradient(120% 80% at 50% -20%, rgba(124, 108, 245, 0.35), transparent 55%),
-    radial-gradient(80% 50% at 100% 50%, rgba(61, 214, 140, 0.08), transparent),
-    var(--bg);
-  line-height: 1.45;
-}
-
 .app {
   max-width: 420px;
   margin: 0 auto;
@@ -157,13 +120,13 @@ body {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-.input[type="number"]::-webkit-outer-spin-button,
-.input[type="number"]::-webkit-inner-spin-button {
+.input[type='number']::-webkit-outer-spin-button,
+.input[type='number']::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
-.input[type="number"] {
+.input[type='number'] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
