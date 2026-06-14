@@ -163,7 +163,17 @@ export function calculate(
   }
 
   const rate = getRateForMonths(months, price, down);
-  const markupAmount = principal * (rate / 100);
+  let markupAmount = principal * (rate / 100);
+
+  if (hasDown && down !== recommendedDown) {
+    const referenceFinanced = price - recommendedDown;
+    if (referenceFinanced > 0) {
+      const baseRate = getRateForMonths(months, price, recommendedDown);
+      const baseMarkup = price * (baseRate / 100);
+      markupAmount = baseMarkup * ((price - down) / referenceFinanced);
+    }
+  }
+
   const rawTotalPay = price + markupAmount;
   const step = getTotalPayStep(months, down, minDown);
   const totalPay = roundTotalPayUp(rawTotalPay - down, step) + down;
